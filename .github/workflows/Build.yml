@@ -1,0 +1,62 @@
+name: Vivo Y21 Custom Kernel Builder
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Compiling Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential ccache cpio curl flex g++-multilib gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzops pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev
+
+      - name: Setup Clang and GCC Toolchains
+        run: |
+          echo ">> Cloning custom crDroid Clang 11..."
+          git clone --depth=1 https://github.com ${{ github.workspace }}/clang
+          
+          echo ">> Cloning AArch64 GCC Cross-Compiler..."
+          git clone --depth=1 https://github.com ${{ github.workspace }}/gcc64
+
+      - name: Clone Vivo Y21 Kernel Source
+        run: |
+          echo ">> Cloning target repository..."
+          git clone --depth=1 https://github.com -b master ${{ github.workspace }}/myKernel
+
+      - name: Compile ARM64 Custom Kernel
+        run: |
+          cd ${{ github.workspace }}/myKernel
+          mkdir -p out
+          
+          # Inject toolchains into environmental variables
+          export PATH="${{ github.workspace }}/clang/bin:${{ github.workspace }}/gcc64/bin:${PATH}"
+          export ARCH=arm64
+          export SUBARCH=arm64
+          
+          echo ">> Generating kernel configuration..."
+          make O=out ARCH=arm64 k65v1_64_bsp_defconfig_PD2139F_EX
+          
+          echo ">> Starting compilation threads..."
+          make -j"$(nproc --all)" O=out \
+               ARCH=arm64 \
+               CC=clang \
+               CLANG_TRIPLE=aarch64-linux-gnu- \
+               CROSS_COMPILE=aarch64-linux-android- \
+               HOSTCC=gcc \
+               HOSTCXX=g++
+
+      - name: Verify and Upload Kernel Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vivo-Y21-Kernel-Output
+          path: |
+            ${{ github.workspace }}/myKernel/out/arch/arm64/boot/Image.gz
+            ${{ github.workspace }}/myKernel/out/arch/arm64/boot/Image
+            ${{ github.workspace }}/myKernel/out/arch/arm64/boot/dtb
+            ${{ github.workspace }}/myKernel/out/arch/arm64/boot/dtbo.img
+          if-no-files-found: error
