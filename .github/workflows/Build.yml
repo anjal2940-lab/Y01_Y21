@@ -19,10 +19,10 @@ jobs:
       - name: Setup Clang and GCC Toolchains
         run: |
           echo ">> Cloning custom crDroid Clang 11..."
-          git clone --depth=1 https://github.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-6443078 ${{ github.workspace }}/clang
+          git clone --depth=1 https://github.com ${{ github.workspace }}/clang
           
           echo ">> Cloning AArch64 GCC Cross-Compiler..."
-          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 -b lineage-19.1 ${{ github.workspace }}/gcc64
+          git clone --depth=1 https://github.com -b lineage-19.1 ${{ github.workspace }}/gcc64
 
       - name: Compile ARM64 Custom Kernel
         run: |
@@ -34,6 +34,11 @@ jobs:
           export SUBARCH=arm64
           
           echo ">> Generating kernel configuration..."
+          # Fix: Run defconfig directly in root first, then move it to the output directory to satisfy MediaTek build setups
+          make ARCH=arm64 k65v1_64_bsp_defconfig_PD2139F_EX
+          cp .config out/.config
+          
+          # Fix: Also run defconfig pointing to output to ensure absolute path structures are satisfied 
           make O=out ARCH=arm64 k65v1_64_bsp_defconfig_PD2139F_EX
           
           echo ">> Starting compilation threads..."
